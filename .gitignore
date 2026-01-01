@@ -1,0 +1,5 @@
+notes.txt
+idea.txt
+
+__pycache__/
+*.pyc
