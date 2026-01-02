@@ -41,17 +41,17 @@ class MazeServer:
 
     try:
       while True:
-        data = conn.recv(1024)
+        data = conn.recv(2048)
         if not data:
           break
         
         try:
           msg = json.loads(data.decode('utf-8'))
-          print(f"[MOVE] Player {player_id}: {msg}")
-
+          
           if msg.get("type") == "MOVE":
+            print(f"[MOVE] Player {player_id}: {msg}")
             direction = msg.get("direction")
- 
+          
             with self.lock:
               result = self.game.validate_move(player_id, direction)
                         
@@ -69,8 +69,18 @@ class MazeServer:
             if result.get("status") == "TREASURE_FOUND":
               print(f"[GAME OVER] Winner: Player {player_id}")
               self.broadcast({"type": "GAME_OVER", "winner": player_id})
+          
+          elif msg.get("type") == "CHAT":
+            print(f"[CHAT] Player {player_id}: {msg.get('content')}")
+            chat_msg = {
+              "type": "CHAT",
+              "sender": player_id,
+              "content": msg.get("content")
+            }
+            self.broadcast(chat_msg, exclude_client=conn)
+
         except json.JSONDecodeError:
-          print(f"[ERROR] Invalid JSON format from player {player_id}")
+          print(f"[ERROR] Invalid JSON from player {player_id}")
 
     except ConnectionResetError:
       print(f"[Error] Connection with player {player_id} lost")
@@ -82,22 +92,28 @@ class MazeServer:
       print(f"[THE END] Player {player_id} disconnected")
 
   def start_game_logic(self):
-    print("[GAME] Initializing game boards")
+    print("[GAME] Generating maps...")
     with self.lock:
       self.game.generate_random_board(0)
       self.game.generate_random_board(1)
       current_turn = self.game.turn
 
-    start_msg = {
-      "type": "GAME_START",
-      "turn": current_turn,
-      "board_size": 10
-    }
-    self.broadcast(start_msg)
+    with self.lock:
+      for i, client in enumerate(self.clients):
+        if i < 2:
+          start_msg = {
+            "type": "GAME_START",
+            "turn": current_turn,
+            "my_board": self.game.boards[i],
+            "board_size": 10
+          }
+          self.send_to_client(client, start_msg)
+
     print(f"[GAME] Game started. Turn: Player {current_turn}")
 
   def start(self):
     player_id = 0
+    print("[INFO] Waiting for players...")
     while len(self.clients) < MAX_PLAYERS:
       conn, addr = self.server_socket.accept()
       with self.lock:
@@ -109,7 +125,7 @@ class MazeServer:
       
       print(f"[INFO] Active players: {len(self.clients)}/{MAX_PLAYERS}")
 
-    print("[INFO] Max players reached. Starting game.")
+    print("[INFO] Max players reached. Starting game logic in 1s...")
     time.sleep(1)
     self.start_game_logic()
 
