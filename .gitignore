@@ -4,4 +4,4 @@ idea.txt
 __pycache__/
 *.pyc
 
-*txt
+*/*txt

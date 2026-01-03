@@ -25,6 +25,3 @@
 * Plansza 10x10.
 * Ruchy na zmianę.
 * Serwer blokuje ruchy nie w swojej turze.
-
-## 5. Brakujący element
-Logika generowania algorytmu nie jest odpowiednio stworzona, aktualne rozwiązanie jest tymczasowe i niekompletne. 

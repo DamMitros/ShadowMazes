@@ -16,6 +16,7 @@ class GameState:
     }
     self.turn = 0
     self.winner = None
+    self.moves_counter = 0
 
   def generate_random_board(self, player_id):
     grid = [[1 for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
@@ -57,7 +58,7 @@ class GameState:
       return {"status": "GAME_OVER", "winner": self.winner}
 
     if player_id != self.turn:
-      return {"status": "NOT_YOUR_TURN"}
+      return {"status": "NOT_YOUR_TURN", "next_turn": self.turn}
 
     x, y = self.positions[player_id]
     new_x, new_y = x, y
@@ -68,20 +69,29 @@ class GameState:
     elif direction == "RIGHT": new_x += 1
 
     if not (0 <= new_x < BOARD_SIZE and 0 <= new_y < BOARD_SIZE):
-      self.turn = 1 if player_id == 0 else 0
+      self.change_turn()
       return {"status": "WALL_HIT", "x": x, "y": y, "next_turn": self.turn}
     
     opponent_id = 1 if player_id == 0 else 0
     cell_type = self.boards[opponent_id][new_y][new_x]
 
     if cell_type == 1:
-      self.turn = opponent_id
+      self.change_turn()
       return {"status": "WALL_HIT", "x": x, "y": y, "next_turn": self.turn}
     
     self.positions[player_id] = (new_x, new_y)
+    self.moves_counter += 1
     
     if cell_type == 2:
       self.winner = player_id
-      return {"status": "TREASURE_FOUND", "winner": player_id, "x": new_x, "y": new_y}
+      return {"status": "TREASURE_FOUND", "winner": player_id, "x": new_x, "y": new_y, "next_turn": self.turn}
 
-    return {"status": "MOVED", "x": new_x, "y": new_y}
+    status = "MOVED"
+    if self.moves_counter >= MAX_MOVES:
+      self.change_turn()
+
+    return {"status": status, "x": new_x, "y": new_y, "next_turn": self.turn}
+
+  def change_turn(self):
+    self.turn = 1 if self.turn == 0 else 0
+    self.moves_counter = 0
