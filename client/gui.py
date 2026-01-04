@@ -2,7 +2,7 @@ import tkinter as tk, sys, os
 from tkinter import messagebox
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from common.constants import STYLE
+from common.constants import COLORS, STYLE
 from common.protocol import *
 from client import GameClient
 from board import BoardRenderer
@@ -144,10 +144,14 @@ class GameClientGUI:
       self.log(f"<{name}> {msg.get('content')}", tag)
 
     elif mtype == MSG_GAME_OVER:
-      w = msg.get("winner")
-      txt = "VICTORY!" if w == self.player_id else "DEFEAT!"
-      messagebox.showinfo("GAME OVER", txt)
-      self.root.quit()
+          w = msg.get("winner")
+          is_victory = (w == self.player_id)
+
+          self.my_turn = False
+          self.lbl_status.config(text="GAME OVER", fg="#fff")
+          
+          self.show_game_over_screen(is_victory)
+          self.log(f"GAME OVER. Winner: {w}", "sys")
 
   def _check_turn(self, next_turn):
     if next_turn is not None:
@@ -173,6 +177,36 @@ class GameClientGUI:
     BoardRenderer.draw(self.canvas_def, self.my_def_grid, True, self.enemy_pos_def)
     BoardRenderer.draw(self.canvas_atk, self.my_atk_grid, False, self.my_pos_atk)
 
+  def show_game_over_screen(self, is_victory):
+      overlay = tk.Frame(self.root, bg="#050505")
+      overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+      overlay.bind("<Button-1>", lambda e: "break")
+
+      center_frame = tk.Frame(overlay, bg="#140f0f", bd=2, relief="solid")
+      center_frame.place(relx=0.5, rely=0.5, anchor="center")
+      txt = "VICTORY!" if is_victory else "DEFEAT"
+      color = COLORS["treasure_gold"] if is_victory else STYLE["accent_alert"]
+      
+      sub_txt = "You found the treasure!" if is_victory else "Enemy found your treasure."
+      tk.Label(center_frame, text=txt, fg=color, bg="#140f0f", 
+              font=("Courier New", 40, "bold")).pack(padx=50, pady=(30, 10))
+      
+      tk.Label(center_frame, text=sub_txt, fg=STYLE["text_main"], bg="#140f0f",
+              font=STYLE["font_main"]).pack(pady=(0, 30))
+
+      btn_frame = tk.Frame(center_frame, bg="#140f0f")
+      btn_frame.pack(pady=20)
+
+      tk.Button(btn_frame, text="EXIT GAME", command=self.root.destroy,
+                bg="#333", fg="white", font=("Segoe UI", 12), relief="flat", padx=20, pady=5)\
+                .pack(side="left", padx=10)
+
+      #TODO: Sama mechanika jest jeszcze do poprawy -- system do końca nie radzi sobie z ponownym uruchomieniem
+      tk.Button(btn_frame, text="RESTART APP", 
+                command=lambda: os.execl(sys.executable, sys.executable, *sys.argv),
+                bg=STYLE["accent_orange"], fg="black", font=("Segoe UI", 12, "bold"), 
+                relief="flat", padx=20, pady=5).pack(side="left", padx=10)
+    
   def log(self, msg, tag=None):
     self.txt_log.config(state="normal")
     self.txt_log.insert("end", msg+"\n", tag)
