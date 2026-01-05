@@ -9,22 +9,25 @@ MAX_PLAYERS = 2
 class MazeServer:
   def __init__(self):
     self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     self.server_socket.bind((HOST, PORT))
     self.server_socket.listen(MAX_PLAYERS)
+    
     self.clients = []
     self.lock = threading.Lock()
-    self.game = GameState()
+    self.game = None
+    self.game_running = False
+    
     print(f"[START] Server listening on {HOST}:{PORT}")
 
   def broadcast(self, message, exclude_client=None):
     json_msg = json.dumps(message)
     with self.lock:
-      for client in self.clients:
+      for client in self.clients[:]: 
         if client != exclude_client:
           try:
             client.sendall(json_msg.encode('utf-8'))
           except:
-            # self.clients.remove(client)
             pass
 
   def send_to_client(self, client, message):
@@ -47,13 +50,16 @@ class MazeServer:
         
         try:
           msg = json.loads(data.decode('utf-8'))
-          
-          if msg.get("type") == "MOVE":
+
+          if msg.get("type") == "MOVE" and self.game_running:
             print(f"[MOVE] Player {player_id}: {msg}")
             direction = msg.get("direction")
           
             with self.lock:
-              result = self.game.validate_move(player_id, direction)
+              if self.game:
+                result = self.game.validate_move(player_id, direction)
+              else:
+                continue
                         
             response = {"type": "MOVE_RESULT", "payload": result}
             self.send_to_client(conn, response)
@@ -69,6 +75,7 @@ class MazeServer:
             if result.get("status") == "TREASURE_FOUND":
               print(f"[GAME OVER] Winner: Player {player_id}")
               self.broadcast({"type": "GAME_OVER", "winner": player_id})
+              self.game_running = False
           
           elif msg.get("type") == "CHAT":
             print(f"[CHAT] Player {player_id}: {msg.get('content')}")
@@ -83,19 +90,24 @@ class MazeServer:
           print(f"[ERROR] Invalid JSON from player {player_id}")
 
     except ConnectionResetError:
-      print(f"[Error] Connection with player {player_id} lost")
+      print(f"[Info] Player {player_id} connection lost")
     finally:
-      conn.close()
       with self.lock:
         if conn in self.clients:
           self.clients.remove(conn)
-      print(f"[THE END] Player {player_id} disconnected")
+      try:
+        conn.close()
+      except:
+        pass
+      print(f"[DISCONNECT] Player {player_id} gone.")
 
-  def start_game_logic(self):
-    print("[GAME] Generating maps...")
+  def start_round(self):
+    print("[GAME] Generating maps for new round...")
     with self.lock:
+      self.game = GameState()
       self.game.generate_random_board(0)
       self.game.generate_random_board(1)
+      self.game_running = True
       current_turn = self.game.turn
 
     with self.lock:
@@ -109,32 +121,58 @@ class MazeServer:
           }
           self.send_to_client(client, start_msg)
 
-    print(f"[GAME] Game started. Turn: Player {current_turn}")
+    print(f"[GAME] Round started. Turn: Player {current_turn}")
+
+    while self.game_running:
+      with self.lock:
+        if len(self.clients) < 2:
+          print("[GAME] Player disconnected during game. Aborting round.")
+          self.game_running = False
+          break
+      time.sleep(1)
+
+    print("[GAME] Round finished. Preparing for restart...")
+    
+    with self.lock:
+      for client in self.clients:
+        try:
+          client.close()
+        except:
+          pass
+      self.clients.clear()
 
   def start(self):
-    player_id = 0
-    print("[INFO] Waiting for players...")
-    while len(self.clients) < MAX_PLAYERS:
-      conn, addr = self.server_socket.accept()
-      with self.lock:
-        self.clients.append(conn)
-      
-      thread = threading.Thread(target=self.handle_client, args=(conn, addr, player_id))
-      thread.start()
-      player_id += 1
-      
-      print(f"[INFO] Active players: {len(self.clients)}/{MAX_PLAYERS}")
+    while True:
+      print("\n--- NEW SESSION: WAITING FOR PLAYERS ---")
+      self.clients = []
+      player_id = 0
 
-    print("[INFO] Max players reached. Starting game logic in 1s...")
-    time.sleep(1)
-    self.start_game_logic()
+      while len(self.clients) < MAX_PLAYERS:
+        try:
+          conn, addr = self.server_socket.accept()
+          with self.lock:
+            self.clients.append(conn)
+          
+          thread = threading.Thread(target=self.handle_client, args=(conn, addr, player_id))
+          thread.daemon = True
+          thread.start()
+          
+          player_id += 1
+          print(f"[LOBBY] Active players: {len(self.clients)}/{MAX_PLAYERS}")
+        except Exception as e:
+          print(f"[ERROR] Accept error: {e}")
 
-    try:
-      while True:
-        time.sleep(1)
-    except KeyboardInterrupt:
-      print("\n[SHUTDOWN] Server stopping...")
+      print("[LOBBY] Max players reached. Starting in 1s...")
+      time.sleep(1)
+
+      self.start_round()
+
+      print("[SESSION] Cleaning up before next match...")
+      time.sleep(2)
 
 if __name__ == "__main__":
   server = MazeServer()
-  server.start()
+  try:
+    server.start()
+  except KeyboardInterrupt:
+    print("\n[SHUTDOWN] Server stopped manually.")
