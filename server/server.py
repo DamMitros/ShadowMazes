@@ -20,15 +20,18 @@ class MazeServer:
     
     print(f"[START] Server listening on {HOST}:{PORT}")
 
-  def broadcast(self, message, exclude_client=None):
+  def _broadcast_internal(self, message, exclude_client=None):
     json_msg = json.dumps(message)
+    for client in self.clients[:]: 
+      if client != exclude_client:
+        try:
+          client.sendall(json_msg.encode('utf-8'))
+        except:
+          pass
+
+  def broadcast(self, message, exclude_client=None):
     with self.lock:
-      for client in self.clients[:]: 
-        if client != exclude_client:
-          try:
-            client.sendall(json_msg.encode('utf-8'))
-          except:
-            pass
+      self._broadcast_internal(message, exclude_client)
 
   def send_to_client(self, client, message):
     try:
@@ -44,10 +47,32 @@ class MazeServer:
 
     try:
       while True:
-        data = conn.recv(2048)
-        if not data:
+        try:
+          data = conn.recv(2048)
+          if not data:
+            raise ConnectionResetError("Empty data - client closed")
+        
+        except ConnectionResetError:
+          print(f"[DISCONNECT] Player {player_id} disconnected unexpectedly.")
+          
+          with self.lock:
+            if self.game_running:
+              winner_id = 1 if player_id == 0 else 0
+              print(f"[GAME OVER] Walkover! Winner: Player {winner_id}")
+              
+              walkover_msg = {
+                "type": "GAME_OVER",
+                "winner": winner_id,
+                "reason": "OPPONENT_DISCONNECTED"
+              }
+
+              self._broadcast_internal(walkover_msg, exclude_client=conn)
+              self.game_running = False 
           break
         
+        except OSError:
+          break 
+
         try:
           msg = json.loads(data.decode('utf-8'))
 
@@ -89,8 +114,8 @@ class MazeServer:
         except json.JSONDecodeError:
           print(f"[ERROR] Invalid JSON from player {player_id}")
 
-    except ConnectionResetError:
-      print(f"[Info] Player {player_id} connection lost")
+    except Exception as e:
+        print(f"[ERROR] Unexpected error in handler: {e}")
     finally:
       with self.lock:
         if conn in self.clients:
@@ -99,7 +124,7 @@ class MazeServer:
         conn.close()
       except:
         pass
-      print(f"[DISCONNECT] Player {player_id} gone.")
+      print(f"[EXIT] Thread for Player {player_id} finished.")
 
   def start_round(self):
     print("[GAME] Generating maps for new round...")

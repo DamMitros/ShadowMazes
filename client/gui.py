@@ -26,6 +26,9 @@ class GameClientGUI:
     self.my_pos_atk = [0, 0]
     self.enemy_pos_def = [0, 0]
 
+    self.current_overlay = None
+    self.game_ended = False
+
     self._init_layout()
     self.input.bind_controls(self.root)
     self._connect()
@@ -92,7 +95,8 @@ class GameClientGUI:
     self.root.after(0, lambda: self.handle_message(msg))
 
   def _safe_on_disconnect(self):
-    self.root.after(0, lambda: messagebox.showinfo("Info", "Disconnected"))
+    if not self.game_ended:
+      self.root.after(0, self.show_disconnect_screen)
 
   def handle_message(self, msg):
     mtype = msg.get("type")
@@ -100,8 +104,13 @@ class GameClientGUI:
     if mtype == MSG_CONNECTED:
       self.player_id = msg.get("player_id")
       self.root.title(f"Shadow Mazes | Player {self.player_id}")
+      self.log(f"[SYS] Connected to server as Player {self.player_id}.", "sys")
+      self.show_lobby_screen()
 
     elif mtype == MSG_GAME_START:
+      self.game_ended = False
+      self._clear_overlay()
+
       self.my_def_grid = msg.get("my_board")
       turn = msg.get("turn")
       self.my_turn = (turn == self.player_id)
@@ -144,14 +153,15 @@ class GameClientGUI:
       self.log(f"<{name}> {msg.get('content')}", tag)
 
     elif mtype == MSG_GAME_OVER:
-          w = msg.get("winner")
-          is_victory = (w == self.player_id)
+      w = msg.get("winner")
+      reason = msg.get("reason")
+      is_victory = (w == self.player_id)
 
-          self.my_turn = False
-          self.lbl_status.config(text="GAME OVER", fg="#fff")
-          
-          self.show_game_over_screen(is_victory)
-          self.log(f"GAME OVER. Winner: {w}", "sys")
+      self.game_ended = True
+      self.my_turn = False
+      self.lbl_status.config(text="GAME OVER", fg="#fff")
+      self.show_game_over_screen(is_victory, reason)
+      self.log(f"GAME OVER. Winner: {w}", "sys")
 
   def _check_turn(self, next_turn):
     if next_turn is not None:
@@ -177,35 +187,102 @@ class GameClientGUI:
     BoardRenderer.draw(self.canvas_def, self.my_def_grid, True, self.enemy_pos_def)
     BoardRenderer.draw(self.canvas_atk, self.my_atk_grid, False, self.my_pos_atk)
 
-  def show_game_over_screen(self, is_victory):
-      overlay = tk.Frame(self.root, bg="#050505")
-      overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
-      overlay.bind("<Button-1>", lambda e: "break")
+  def _clear_overlay(self):
+    if self.current_overlay:
+      self.current_overlay.destroy()
+      self.current_overlay = None
 
-      center_frame = tk.Frame(overlay, bg="#140f0f", bd=2, relief="solid")
-      center_frame.place(relx=0.5, rely=0.5, anchor="center")
-      txt = "VICTORY!" if is_victory else "DEFEAT"
-      color = COLORS["treasure_gold"] if is_victory else STYLE["accent_alert"]
-      
-      sub_txt = "You found the treasure!" if is_victory else "Enemy found your treasure."
-      tk.Label(center_frame, text=txt, fg=color, bg="#140f0f", 
-              font=("Courier New", 40, "bold")).pack(padx=50, pady=(30, 10))
-      
-      tk.Label(center_frame, text=sub_txt, fg=STYLE["text_main"], bg="#140f0f",
-              font=STYLE["font_main"]).pack(pady=(0, 30))
+  def show_lobby_screen(self):
+    self._clear_overlay()
 
-      btn_frame = tk.Frame(center_frame, bg="#140f0f")
-      btn_frame.pack(pady=20)
+    self.current_overlay = tk.Frame(self.root, bg=STYLE["bg_dark"])
+    self.current_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+    self.current_overlay.bind("<Button-1>", lambda e: "break")
 
-      tk.Button(btn_frame, text="EXIT GAME", command=self.root.destroy,
-                bg="#333", fg="white", font=("Segoe UI", 12), relief="flat", padx=20, pady=5)\
-                .pack(side="left", padx=10)
+    center = tk.Frame(self.current_overlay, bg=STYLE["bg_dark"])
+    center.place(relx=0.5, rely=0.5, anchor="center")
 
-      #TODO: Sama mechanika jest jeszcze do poprawy -- system do końca nie radzi sobie z ponownym uruchomieniem
-      tk.Button(btn_frame, text="RESTART APP", 
-                command=lambda: os.execl(sys.executable, sys.executable, *sys.argv),
-                bg=STYLE["accent_orange"], fg="black", font=("Segoe UI", 12, "bold"), 
-                relief="flat", padx=20, pady=5).pack(side="left", padx=10)
+    tk.Label(center, text="SHADOW MAZES", font=("Courier New", 50, "bold"), 
+             fg=STYLE["accent_orange"], bg=STYLE["bg_dark"]).pack(pady=(0, 10))
+
+    tk.Label(center, text="MULTIPLAYER LOBBY", font=("Segoe UI", 16, "bold"), 
+             fg="#444", bg=STYLE["bg_dark"]).pack(pady=(0, 40))
+
+    status_frame = tk.Frame(center, bg="#1a1a1a", padx=40, pady=20, bd=1, relief="solid")
+    status_frame.pack()
+
+    tk.Label(status_frame, text="CONNECTED AS PLAYER " + str(self.player_id), 
+             font=("Consolas", 12), fg=STYLE["accent_purple"], bg="#1a1a1a").pack()
+
+    tk.Label(status_frame, text="WAITING FOR OPPONENT...", 
+             font=("Segoe UI", 14), fg="#fff", bg="#1a1a1a").pack(pady=(10, 0))
+
+    tk.Label(center, text="Game will start automatically when player 2 connects.", 
+             font=("Segoe UI", 10, "italic"), fg="#666", bg=STYLE["bg_dark"]).pack(pady=30)
+
+  def show_game_over_screen(self, is_victory, reason=None):
+    self._clear_overlay()
+
+    self.current_overlay = tk.Frame(self.root, bg="#050505")
+    self.current_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+    self.current_overlay.bind("<Button-1>", lambda e: "break")
+
+    center_frame = tk.Frame(self.current_overlay, bg="#140f0f", bd=2, relief="solid")
+    center_frame.place(relx=0.5, rely=0.5, anchor="center")
+    
+    txt = "VICTORY!" if is_victory else "DEFEAT"
+    color = COLORS["treasure_gold"] if is_victory else STYLE["accent_alert"]
+    
+    if reason == "OPPONENT_DISCONNECTED":
+        sub_txt = "Opponent surrendered (Disconnected)."
+    else:
+        sub_txt = "You found the treasure!" if is_victory else "Enemy found your treasure."
+    
+    tk.Label(center_frame, text=txt, fg=color, bg="#140f0f", 
+            font=("Courier New", 40, "bold")).pack(padx=60, pady=(40, 10))
+    
+    tk.Label(center_frame, text=sub_txt, fg=STYLE["text_main"], bg="#140f0f",
+            font=STYLE["font_main"]).pack(pady=(0, 30))
+
+    btn_frame = tk.Frame(center_frame, bg="#140f0f")
+    btn_frame.pack(pady=20)
+
+    tk.Button(btn_frame, text="EXIT GAME", command=self.root.destroy,
+              bg="#333", fg="white", font=("Segoe UI", 12), relief="flat", padx=20, pady=5)\
+              .pack(side="left", padx=10)
+
+    tk.Button(btn_frame, text="RESTART APP", 
+              command=lambda: os.execl(sys.executable, sys.executable, *sys.argv),
+              bg=STYLE["accent_orange"], fg="black", font=("Segoe UI", 12, "bold"), 
+              relief="flat", padx=20, pady=5).pack(side="left", padx=10)
+    
+  def show_disconnect_screen(self):
+    self._clear_overlay()
+
+    self.current_overlay = tk.Frame(self.root, bg="#050505")
+    self.current_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+    self.current_overlay.bind("<Button-1>", lambda e: "break")
+
+    center = tk.Frame(self.current_overlay, bg="#140f0f", bd=2, relief="solid")
+    center.place(relx=0.5, rely=0.5, anchor="center")
+
+    tk.Label(center, text="CONNECTION LOST", fg=STYLE["accent_alert"], bg="#140f0f", 
+             font=("Courier New", 30, "bold")).pack(padx=40, pady=(30, 10))
+    
+    tk.Label(center, text="Server disconnected or unreachable.", fg="#888", bg="#140f0f",
+             font=STYLE["font_main"]).pack(pady=(0, 30))
+
+    btn_frame = tk.Frame(center, bg="#140f0f")
+    btn_frame.pack(pady=20)
+
+    tk.Button(btn_frame, text="EXIT", command=self.root.destroy,
+              bg="#333", fg="white", font=("Segoe UI", 12), relief="flat", padx=20, pady=5)\
+              .pack(side="left", padx=10)
+
+    tk.Button(btn_frame, text="RESTART APP", 
+              command=lambda: os.execl(sys.executable, sys.executable, *sys.argv),
+              bg=STYLE["accent_orange"], fg="black", font=("Segoe UI", 12, "bold"), 
+              relief="flat", padx=20, pady=5).pack(side="left", padx=10)
     
   def log(self, msg, tag=None):
     self.txt_log.config(state="normal")
