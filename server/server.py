@@ -1,6 +1,7 @@
 import socket, threading, json, time
 
 from game_state import GameState
+from request_handler import RequestHandler
 
 HOST = '127.0.0.1' 
 PORT = 65432
@@ -17,6 +18,7 @@ class MazeServer:
     self.lock = threading.Lock()
     self.game = None
     self.game_running = False
+    self.handler = RequestHandler(self)
     
     print(f"[START] Server listening on {HOST}:{PORT}")
 
@@ -50,22 +52,19 @@ class MazeServer:
         try:
           data = conn.recv(2048)
           if not data:
-            raise ConnectionResetError("Empty data - client closed")
+            raise ConnectionResetError("Empty data")
         
         except ConnectionResetError:
           print(f"[DISCONNECT] Player {player_id} disconnected unexpectedly.")
-          
           with self.lock:
             if self.game_running:
               winner_id = 1 if player_id == 0 else 0
               print(f"[GAME OVER] Walkover! Winner: Player {winner_id}")
-              
               walkover_msg = {
                 "type": "GAME_OVER",
                 "winner": winner_id,
                 "reason": "OPPONENT_DISCONNECTED"
               }
-
               self._broadcast_internal(walkover_msg, exclude_client=conn)
               self.game_running = False 
           break
@@ -75,41 +74,7 @@ class MazeServer:
 
         try:
           msg = json.loads(data.decode('utf-8'))
-
-          if msg.get("type") == "MOVE" and self.game_running:
-            print(f"[MOVE] Player {player_id}: {msg}")
-            direction = msg.get("direction")
-          
-            with self.lock:
-              if self.game:
-                result = self.game.validate_move(player_id, direction)
-              else:
-                continue
-                        
-            response = {"type": "MOVE_RESULT", "payload": result}
-            self.send_to_client(conn, response)
-
-            if result["status"] in ["MOVED", "WALL_HIT", "TREASURE_FOUND"]:
-              opponent_msg = {
-                "type": "OPPONENT_ACTION",
-                "player_id": player_id,
-                "result": result
-              }
-              self.broadcast(opponent_msg, exclude_client=conn)
-
-            if result.get("status") == "TREASURE_FOUND":
-              print(f"[GAME OVER] Winner: Player {player_id}")
-              self.broadcast({"type": "GAME_OVER", "winner": player_id})
-              self.game_running = False
-          
-          elif msg.get("type") == "CHAT":
-            print(f"[CHAT] Player {player_id}: {msg.get('content')}")
-            chat_msg = {
-              "type": "CHAT",
-              "sender": player_id,
-              "content": msg.get("content")
-            }
-            self.broadcast(chat_msg, exclude_client=conn)
+          self.handler.handle_message(msg, player_id, conn)
 
         except json.JSONDecodeError:
           print(f"[ERROR] Invalid JSON from player {player_id}")
@@ -154,9 +119,10 @@ class MazeServer:
           print("[GAME] Player disconnected during game. Aborting round.")
           self.game_running = False
           break
-      time.sleep(1)
+      time.sleep(0.1)
 
     print("[GAME] Round finished. Preparing for restart...")
+    time.sleep(2.0)
     
     with self.lock:
       for client in self.clients:

@@ -1,6 +1,7 @@
 HOST = '127.0.0.1'
 PORT = 65432
 BUFFER_SIZE = 2048
+BOARD_SIZE = 10
 
 STYLE = {
   "bg_dark": "#0f0a0a",
@@ -8,7 +9,7 @@ STYLE = {
   "accent_orange": "#ff5e00",
   "accent_purple": "#7e22ce",
   "accent_alert": "#ff0000",
-  "text_main": "#e5e5e5",
+  "text_main": "#e5e5e5", 
   "text_dim": "#888888",
   "font_header": ("Courier New", 24, "bold"),
   "font_main": ("Segoe UI", 10),

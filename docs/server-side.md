@@ -1,27 +1,26 @@
 # Dokumentacja Serwera
 
 ## 1. Architektura
-* **Model:** Client-Server (TCP Sockets).
-* **Współbieżność:** `threading` (osobny wątek dla każdego gracza).
-* **Dane:** JSON (UTF-8).
+Serwer oparty jest na zasadzie **Separation of Concerns** (Rozdziału Odpowiedzialności).
 
-## 2. Pliki
-* `server.py`: Obsługa sieci. Przyjmuje JSON -> pyta logikę -> odsyła JSON.
-* `game_state.py`: Czysta logika. Trzyma plansze, sprawdza kolizje i wygraną.
+### Struktura modułów:
+* `server.py` **(Connection Layer)**: Zarządza gniazdami (Sockets), wątkami klientów i cyklem życia serwera. Nie zawiera logiki biznesowej gry.
+* `request_handler.py` **(Logic Layer)**: Przetwarza przychodzące pakiety JSON. Decyduje o tym, jak obsłużyć ruch, czat czy rozłączenie.
+* `game_state.py` **(Domain Layer)**: Zawiera czystą logikę gry (generowanie map, walidacja ruchów, sprawdzanie warunków zwycięstwa).
 
-## 3. Protokół (Przykładowe komunikaty)
+## 2. Współbieżność i Bezpieczeństwo
+* **Threading**: Każdy gracz obsługiwany jest przez osobny wątek.
+* **Synchronizacja**: Dostęp do współdzielonego stanu gry chroniony jest przez `threading.Lock()`, co zapobiega wyścigom (Race Conditions).
+* **Deadlock Prevention**: Zastosowano architekturę metod prywatnych (`_broadcast_internal`) i publicznych (`broadcast`), aby uniknąć zakleszczeń przy rekurencyjnym wywoływaniu blokad.
 
-### Klient -> Serwer
-* **Ruch:** `{"type": "MOVE", "direction": "UP"}`
+## 3. Protokół (JSON)
+Komunikacja odbywa się bezstanowo za pomocą obiektów JSON.
 
-### Serwer -> Klient
-* **Start:** `{"type": "GAME_START", "turn": 0, "board_size": 10}`
-* **Wynik ruchu (do autora):** `{"type": "MOVE_RESULT", "payload": {"status": "MOVED", "x": 2, "y": 3}}`
-    * Statusy: `MOVED`, `WALL_HIT`, `TREASURE_FOUND`, `NOT_YOUR_TURN`.
-* **Info o wrogu (do drugiego):** `{"type": "OPPONENT_ACTION", "result": {...}}`
-* **Koniec:** `{"type": "GAME_OVER", "winner": 1}`
+### Przykładowy przepływ (Ruch):
+1. **Klient**: `{"type": "MOVE", "direction": "UP"}`
+2. **Serwer (Handler)**: Waliduje ruch w `game_state.py`.
+3. **Serwer**: Odsyła `MOVE_RESULT` do autora i `OPPONENT_ACTION` do przeciwnika.
 
-## 4. Zasady Gry (Backend)
-* Plansza 10x10.
-* Ruchy na zmianę.
-* Serwer blokuje ruchy nie w swojej turze.
+## 4. Mechanizmy Specjalne
+* **Walkower**: Serwer automatycznie wykrywa nagłe rozłączenie gracza i przyznaje zwycięstwo walkowerem pozostałemu uczestnikowi.
+* **Lobby**: Mechanizm oczekiwania na podłączenie dwóch graczy przed startem rundy.

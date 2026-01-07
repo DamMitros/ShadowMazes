@@ -17,7 +17,7 @@ class InputHandler:
     self.gui.entry_chat.bind("<Return>", self.send_chat)
 
   def send_move(self, direction):
-    if self.gui.my_turn and self.gui.steps_left > 0:
+    if self.gui.state.my_turn and self.gui.state.steps_left > 0:
       self.net.send(MSG_MOVE, {"direction": direction})
 
   def send_chat(self, event=None):
