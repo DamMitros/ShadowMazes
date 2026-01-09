@@ -12,6 +12,7 @@ class ClientGameState:
     
     self.my_pos_atk = [0, 0]
     self.enemy_pos_def = [0, 0]
+    self.pending_move = None
 
   def reset_for_new_game(self, my_board, start_turn):
     self.my_def_grid = my_board
@@ -23,6 +24,7 @@ class ClientGameState:
     self.my_atk_grid[0][0] = 0
     self.my_pos_atk = [0, 0]
     self.enemy_pos_def = [0, 0]
+    self.pending_move = None
 
   def update_energy(self, is_move_successful):
     if is_move_successful:

@@ -123,6 +123,12 @@ class GameClientGUI:
 
     elif mtype == MSG_OPPONENT_ACTION:
       res = msg.get("result")
+
+      ex = res.get("x")
+      ey = res.get("y")
+
+      if ex is not None and ey is not None:
+        self.state.enemy_pos_def = [ex, ey]
       if res.get("status") == STATUS_WALL:
         self.log("Enemy hit wall.", "sys")
       
@@ -159,8 +165,8 @@ class GameClientGUI:
       self.lbl_steps.config(text="OPPONENT'S TURN", fg=STYLE["text_dim"])
 
     BoardRenderer.draw(self.canvas_def, self.state.my_def_grid, True, self.state.enemy_pos_def)
-    BoardRenderer.draw(self.canvas_atk, self.state.my_atk_grid, False, self.state.my_pos_atk)
-
+    BoardRenderer.draw(self.canvas_atk, self.state.my_atk_grid, False, self.state.my_pos_atk, self.state.pending_move)
+    
   def log(self, msg, tag=None):
     self.txt_log.config(state="normal")
     self.txt_log.insert("end", msg+"\n", tag)

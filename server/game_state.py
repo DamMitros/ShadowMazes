@@ -19,39 +19,36 @@ class GameState:
     self.moves_counter = 0
 
   def generate_random_board(self, player_id):
-    grid = [[1 for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
-    stack = [(0, 0)]
-    grid[0][0] = 0
-    
-    while stack:
-      cx, cy = stack[-1]
-      neighbors = []
-      for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2)]:
-        nx, ny = cx + dx, cy + dy
-        if 0 <= nx < BOARD_SIZE and 0 <= ny < BOARD_SIZE and grid[ny][nx] == 1:
-          neighbors.append((nx, ny, dx // 2, dy // 2))
-      
-      if neighbors:
-        nx, ny, hx, hy = random.choice(neighbors)
-        grid[ny][nx] = 0
-        grid[cy + hy][cx + hx] = 0
-        stack.append((nx, ny))
-      else:
-        stack.pop()
-
-    for _ in range(int(BOARD_SIZE * BOARD_SIZE * 0.1)):
-      rx, ry = random.randint(0, BOARD_SIZE-1), random.randint(0, BOARD_SIZE-1)
-      if grid[ry][rx] == 1:
-        grid[ry][rx] = 0
-
     while True:
-      tx, ty = random.randint(5, 9), random.randint(5, 9)
-      if grid[ty][tx] == 0:
-        grid[ty][tx] = 2
-        break
+      grid = [[1 for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
 
-    grid[0][0] = 0 
-    self.boards[player_id] = grid
+      cx, cy = 0, 0
+      grid[cy][cx] = 0
+      path = [(cx, cy)]
+
+      success = False
+      for _ in range(29):
+        neighbors = []
+        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+          nx, ny = cx + dx, cy + dy
+          if 0 <= nx < BOARD_SIZE and 0 <= ny < BOARD_SIZE:
+            if grid[ny][nx] == 1:
+              neighbors.append((nx, ny))
+        
+        if not neighbors:
+          break
+        
+        cx, cy = random.choice(neighbors)
+        grid[cy][cx] = 0
+        path.append((cx, cy))
+
+      if len(path) == 30:
+        ex, ey = path[-1]
+        if ex == 0 or ex == BOARD_SIZE-1 or ey == 0 or ey == BOARD_SIZE-1:
+          grid[ey][ex] = 2
+          self.boards[player_id] = grid
+          print(f"[GAME] Generated valid board for Player {player_id}")
+          return
 
   def validate_move(self, player_id, direction):
     if self.winner is not None:

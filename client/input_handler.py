@@ -9,16 +9,24 @@ class InputHandler:
     self.gui = gui_ref
 
   def bind_controls(self, root):
-    root.bind("<Up>", lambda e: self.send_move("UP"))
-    root.bind("<Down>", lambda e: self.send_move("DOWN"))
-    root.bind("<Left>", lambda e: self.send_move("LEFT"))
-    root.bind("<Right>", lambda e: self.send_move("RIGHT"))
-
+    root.bind("<Up>", lambda e: self.select_move("UP"))
+    root.bind("<Down>", lambda e: self.select_move("DOWN"))
+    root.bind("<Left>", lambda e: self.select_move("LEFT"))
+    root.bind("<Right>", lambda e: self.select_move("RIGHT"))
+    root.bind("<space>", lambda e: self.confirm_move())
+    
     self.gui.entry_chat.bind("<Return>", self.send_chat)
 
-  def send_move(self, direction):
+  def select_move(self, direction):
     if self.gui.state.my_turn and self.gui.state.steps_left > 0:
+      self.gui.state.pending_move = direction
+      self.gui.update_ui()
+
+  def confirm_move(self):
+    direction = self.gui.state.pending_move
+    if direction and self.gui.state.my_turn and self.gui.state.steps_left > 0:
       self.net.send(MSG_MOVE, {"direction": direction})
+      self.gui.state.pending_move = None
 
   def send_chat(self, event=None):
     txt = self.gui.entry_chat.get()

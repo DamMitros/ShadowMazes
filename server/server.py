@@ -1,4 +1,4 @@
-import socket, threading, json, time
+import socket, threading, json, time, random
 
 from game_state import GameState
 from request_handler import RequestHandler
@@ -97,6 +97,7 @@ class MazeServer:
       self.game = GameState()
       self.game.generate_random_board(0)
       self.game.generate_random_board(1)
+      self.game.turn = random.choice([0, 1])
       self.game_running = True
       current_turn = self.game.turn
 
