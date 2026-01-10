@@ -34,11 +34,21 @@ class ClientGameState:
     if status == "MOVED":
       self.my_atk_grid[y][x] = 0
       self.my_pos_atk = [x, y]
+      
     elif status == "WALL_HIT":
-      self.my_atk_grid[y][x] = 1
+      wx, wy = x, y 
+      if self.pending_move == "UP": wy -= 1
+      elif self.pending_move == "DOWN": wy += 1
+      elif self.pending_move == "LEFT": wx -= 1
+      elif self.pending_move == "RIGHT": wx += 1
+      
+      if 0 <= wx < BOARD_SIZE and 0 <= wy < BOARD_SIZE:
+        self.my_atk_grid[wy][wx] = 1
+
     elif status == "TREASURE_FOUND":
       self.my_atk_grid[y][x] = 2
       self.my_pos_atk = [x, y]
+    self.pending_move = None
 
   def check_turn_change(self, next_turn):
     if next_turn is not None:

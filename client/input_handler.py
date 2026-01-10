@@ -26,7 +26,7 @@ class InputHandler:
     direction = self.gui.state.pending_move
     if direction and self.gui.state.my_turn and self.gui.state.steps_left > 0:
       self.net.send(MSG_MOVE, {"direction": direction})
-      self.gui.state.pending_move = None
+      # self.gui.state.pending_move = None
 
   def send_chat(self, event=None):
     txt = self.gui.entry_chat.get()
